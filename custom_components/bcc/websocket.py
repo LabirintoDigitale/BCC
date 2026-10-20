@@ -9,7 +9,7 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .const import BARCODE_FORMATS, DOMAIN, SIDES
+from .const import BARCODE_FORMATS, DOMAIN, PREVIEWS, SIDES
 from .store import CardError, CardStore
 
 CARD_FIELDS = {
@@ -18,6 +18,7 @@ CARD_FIELDS = {
     vol.Optional("color"): vol.All(str, vol.Match(r"^#[0-9a-fA-F]{6}$")),
     vol.Optional("notes"): vol.All(str, vol.Length(max=2000)),
     vol.Optional("favorite"): bool,
+    vol.Optional("preview"): vol.In(PREVIEWS),
 }
 NAME = vol.All(str, vol.Strip, vol.Length(min=1, max=100))
 

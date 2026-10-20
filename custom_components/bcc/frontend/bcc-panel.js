@@ -59,6 +59,8 @@ const STRINGS = {
     color: "Color",
     notes: "Notes",
     favorite: "Favorite",
+    preview: "Preview in the list",
+    none: "None",
     front: "Front",
     back: "Back",
     choose: "Photo",
@@ -108,6 +110,8 @@ const STRINGS = {
     color: "Colore",
     notes: "Note",
     favorite: "Preferita",
+    preview: "Anteprima nella lista",
+    none: "Nessuna",
     front: "Fronte",
     back: "Retro",
     choose: "Foto",
@@ -559,8 +563,10 @@ class BccPanel extends HTMLElement {
     });
   }
 
-  _cardArt(card, side = "front") {
-    const file = card[side] || (side === "front" ? card.back : null);
+  // The card's chosen preview side, falling back to the other side; "none" shows just the name.
+  _cardArt(card) {
+    const side = card.preview || "front";
+    const file = side === "none" ? null : card[side] || card[side === "front" ? "back" : "front"];
     if (file) return `<img data-file="${esc(file)}" alt="">`;
     return `<span class="initial">${esc(card.name)}</span>`;
   }
@@ -788,7 +794,7 @@ class BccPanel extends HTMLElement {
   _openEditor(card) {
     const draft = card
       ? { ...card }
-      : { name: "", number: "", format: "code128", color: COLORS[Math.floor(Math.random() * COLORS.length)], notes: "", favorite: false, front: null, back: null };
+      : { name: "", number: "", format: "code128", color: COLORS[Math.floor(Math.random() * COLORS.length)], notes: "", favorite: false, preview: "front", front: null, back: null };
     // Pending image changes: undefined = unchanged, null = remove, string = new data URL
     const pending = { front: undefined, back: undefined };
 
@@ -831,6 +837,10 @@ class BccPanel extends HTMLElement {
               ${COLORS.map((c) => `<button class="swatch" data-color="${c}" style="background:${c}"></button>`).join("")}
               <input type="color" id="f-color" value="${esc(draft.color)}">
             </div></div>
+          <label class="field"><span>${esc(this.t("preview"))}</span>
+            <select id="f-preview">${["none", "front", "back"]
+              .map((v) => `<option value="${v}" ${(draft.preview || "front") === v ? "selected" : ""}>${esc(this.t(v))}</option>`)
+              .join("")}</select></label>
           <label class="check" style="margin-top:14px"><input type="checkbox" id="f-fav" ${draft.favorite ? "checked" : ""}> ${esc(this.t("favorite"))}</label>
           <label class="field"><span>${esc(this.t("notes"))}</span>
             <textarea id="f-notes" maxlength="2000">${esc(draft.notes)}</textarea></label>
@@ -938,6 +948,7 @@ class BccPanel extends HTMLElement {
             color: fColor.value,
             notes: $("#f-notes").value,
             favorite: $("#f-fav").checked,
+            preview: $("#f-preview").value,
           }, pending);
         } finally {
           btn.disabled = false;

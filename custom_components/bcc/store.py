@@ -26,7 +26,7 @@ MAGIC = {
     "webp": (b"RIFF",),
 }
 
-EDITABLE_FIELDS = ("name", "number", "format", "color", "notes", "favorite")
+EDITABLE_FIELDS = ("name", "number", "format", "color", "notes", "favorite", "preview")
 
 
 class CardError(Exception):
@@ -68,6 +68,7 @@ class CardStore:
             "color": "#03a9f4",
             "notes": "",
             "favorite": False,
+            "preview": "front",
             "front": None,
             "back": None,
             "use_count": 0,

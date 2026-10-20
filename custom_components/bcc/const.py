@@ -2,7 +2,7 @@
 
 DOMAIN = "bcc"
 NAME = "BarCodeCards"
-VERSION = "1.2.3"
+VERSION = "1.3.0"
 
 PANEL_URL_PATH = "bcc"
 PANEL_COMPONENT = "bcc-panel"
@@ -21,6 +21,7 @@ MAX_IMAGE_BYTES = 4 * 1024 * 1024
 DATA_REGISTERED = f"{DOMAIN}_registered"
 
 SIDES = ("front", "back")
+PREVIEWS = ("none", "front", "back")
 
 BARCODE_FORMATS = (
     "code128",
