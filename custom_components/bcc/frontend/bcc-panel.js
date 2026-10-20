@@ -222,13 +222,21 @@ async function loadBitmap(file) {
   }
 }
 
-function bitmapToDataUrl(bitmap, max = 1280) {
-  const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.85);
+// Home Assistant's websocket rejects messages over ~4 MB; keep the base64 image well below.
+const MAX_DATA_URL = 3 * 1024 * 1024;
+
+function bitmapToDataUrl(bitmap, max = 2560) {
+  for (const [side, quality] of [[max, 0.92], [max, 0.85], [1920, 0.85], [1280, 0.85]]) {
+    const scale = Math.min(1, side / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const url = canvas.toDataURL("image/jpeg", quality);
+    if (url.length <= MAX_DATA_URL || side === 1280) return url;
+  }
 }
 
 const STYLE = `

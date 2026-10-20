@@ -2,7 +2,7 @@
 
 DOMAIN = "bcc"
 NAME = "BarCodeCards"
-VERSION = "1.2.1"
+VERSION = "1.2.2"
 
 PANEL_URL_PATH = "bcc"
 PANEL_COMPONENT = "bcc-panel"

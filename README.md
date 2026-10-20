@@ -10,7 +10,7 @@ Integrazione custom per **Home Assistant** che aggiunge una voce nella **barra l
 - Formati supportati: Code 128, EAN-13, EAN-8, UPC-A, UPC-E, Code 39, Code 93, ITF / ITF-14, Codabar, QR Code, PDF417, Aztec, Data Matrix, oppure solo numero.
 - **Scansione** del codice con la fotocamera, oppure **lettura automatica** del codice dalla foto del retro.
 - **Import multiplo da screenshot** (es. dall'app VirtualCards): selezioni più screenshot insieme, il pannello legge i codici a barre, salta i duplicati e ti fa rinominare le carte prima di importarle.
-- Le foto vengono ridimensionate nel browser (max 1280 px, JPEG) prima del caricamento.
+- Le foto vengono ridimensionate nel browser (max 2560 px, JPEG alta qualità) prima del caricamento.
 - Dati salvati localmente: elenco in `.storage/bcc.cards`, immagini in `config/bcc_images/`. Le immagini sono servite solo ad utenti autenticati (URL firmati).
 
 ## Installazione
