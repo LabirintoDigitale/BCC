@@ -260,6 +260,7 @@ const STYLE = `
     position: sticky; top: 0; z-index: 2;
   }
   .toolbar .title { flex: 1; font-size: 20px; font-weight: 400; margin-left: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .toolbar .title .version { font-size: 12px; opacity: .7; margin-left: 6px; }
   .icon-btn {
     display: inline-flex; align-items: center; justify-content: center;
     width: 40px; height: 40px; border: none; border-radius: 50%;
@@ -429,8 +430,10 @@ class BccPanel extends HTMLElement {
 
   set panel(panel) {
     this._panel = panel;
-    const title = this.shadowRoot.querySelector(".toolbar .title");
+    const title = this.shadowRoot.querySelector(".toolbar .title .name");
     if (title && panel?.title) title.textContent = panel.title;
+    const version = this.shadowRoot.querySelector(".toolbar .title .version");
+    if (version) version.textContent = panel?.config?.version ? `v${panel.config.version}` : "";
   }
 
   connectedCallback() {
@@ -506,7 +509,8 @@ class BccPanel extends HTMLElement {
       <style>${STYLE}</style>
       <div class="toolbar">
         <span id="menu"></span>
-        <div class="title">${esc(this._panel?.title || "BarCodeCards")}</div>
+        <div class="title"><span class="name">${esc(this._panel?.title || "BarCodeCards")}</span>
+          <span class="version">${this._panel?.config?.version ? `v${esc(this._panel.config.version)}` : ""}</span></div>
         <button class="icon-btn" id="import" title="${esc(this.t("import"))}"><ha-icon icon="mdi:image-multiple"></ha-icon></button>
         <input type="file" id="import-files" accept="image/*" multiple hidden>
         <button class="icon-btn" id="add" title="${esc(this.t("add"))}"><ha-icon icon="mdi:plus"></ha-icon></button>
