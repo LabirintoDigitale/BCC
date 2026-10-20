@@ -71,6 +71,7 @@ const STRINGS = {
     delete: "Delete",
     confirmDelete: "Tap again to delete",
     flip: "Flip",
+    fullscreen: "Full screen",
     copy: "Copy",
     copied: "Copied",
     newCard: "New card",
@@ -119,6 +120,7 @@ const STRINGS = {
     delete: "Elimina",
     confirmDelete: "Tocca di nuovo per eliminare",
     flip: "Gira",
+    fullscreen: "Schermo intero",
     copy: "Copia",
     copied: "Copiato",
     newCard: "Nuova carta",
@@ -319,7 +321,9 @@ const STYLE = `
   .face img { width: 100%; height: 100%; object-fit: cover; }
   .face.back { transform: rotateY(180deg); }
   .face .ph { color: #fff; font-weight: 600; font-size: 18px; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
-  .flip-hint { text-align: center; font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
+  .flip-hint { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
+  .fullimg { position: fixed; inset: 0; z-index: 40; background: #000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
+  .fullimg img { width: 100%; height: 100%; object-fit: contain; }
 
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
@@ -586,8 +590,42 @@ class BccPanel extends HTMLElement {
   }
 
   _closeOverlay() {
+    this._closeFullImage();
     this.shadowRoot.getElementById("overlay").innerHTML = "";
     this._releaseWake();
+  }
+
+  // Image alone on a black screen; any tap goes back to the card.
+  async _openFullImage(file) {
+    if (!file) return;
+    const url = await this._signedUrl(file);
+    if (!url) return;
+    this._closeFullImage();
+    const el = document.createElement("div");
+    el.className = "fullimg";
+    el.innerHTML = `<img src="${esc(url)}" alt="">`;
+    el.addEventListener("click", () => this._closeFullImage());
+    this.shadowRoot.appendChild(el);
+    this._fullImg = el;
+    try {
+      if (el.requestFullscreen) {
+        await el.requestFullscreen();
+        // Leaving fullscreen with Esc / back also closes the image.
+        el.addEventListener("fullscreenchange", () => {
+          if (!document.fullscreenElement) this._closeFullImage();
+        });
+      }
+    } catch {
+      /* fullscreen API unavailable: the fixed layer still covers the panel */
+    }
+  }
+
+  _closeFullImage() {
+    const el = this._fullImg;
+    if (!el) return;
+    this._fullImg = null;
+    el.remove();
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   }
 
   _toast(text) {
@@ -666,7 +704,8 @@ class BccPanel extends HTMLElement {
                    <div class="face back" style="background:${esc(card.color)}">${face("back")}</div>
                  </div>
                </div>
-               <div class="flip-hint">${esc(this.t("front"))} / ${esc(this.t("back"))} · ${esc(this.t("flip"))} ↻</div>`
+               <div class="flip-hint">${esc(this.t("front"))} / ${esc(this.t("back"))} · ${esc(this.t("flip"))} ↻
+                 <button class="icon-btn" data-act="fullscreen" title="${esc(this.t("fullscreen"))}"><ha-icon icon="mdi:fullscreen"></ha-icon></button></div>`
             : ""}
         </div>
         <div class="dlg-foot">
@@ -686,6 +725,11 @@ class BccPanel extends HTMLElement {
       const act = btn.dataset.act;
       if (act === "close") this._closeOverlay();
       else if (act === "flip") btn.classList.toggle("flipped");
+      else if (act === "fullscreen") {
+        const flipped = bd.querySelector(".flip").classList.contains("flipped");
+        const side = flipped ? "back" : "front";
+        this._openFullImage(card[side] || card[flipped ? "front" : "back"]);
+      }
       else if (act === "edit") this._openEditor(card);
       else if (act === "copy") {
         try {

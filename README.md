@@ -6,7 +6,7 @@ Integrazione custom per **Home Assistant** che aggiunge una voce nella **barra l
 
 - Pannello **BarCodeCards** nella barra laterale, disponibile per tutti gli utenti di HA (anche dall'app companion).
 - Griglia delle carte con anteprima del fronte, ricerca, ordinamento (A–Z / più usate) e carte **preferite** in cima.
-- Vista carta a schermo intero con **codice a barre grande su sfondo bianco**, numero copiabile e immagine che si **gira** (tap) tra fronte e retro. Lo schermo resta acceso finché la carta è aperta (Wake Lock, dove supportato).
+- Vista carta a schermo intero con **codice a barre grande su sfondo bianco**, numero copiabile e immagine che si **gira** (tap) tra fronte e retro; un pulsante mostra l'immagine attuale **a schermo intero**, da sola su sfondo nero (un tap per tornare indietro). Lo schermo resta acceso finché la carta è aperta (Wake Lock, dove supportato).
 - Formati supportati: Code 128, EAN-13, EAN-8, UPC-A, UPC-E, Code 39, Code 93, ITF / ITF-14, Codabar, QR Code, PDF417, Aztec, Data Matrix, oppure solo numero.
 - **Scansione** del codice con la fotocamera, oppure **lettura automatica** del codice dalla foto del retro.
 - **Import multiplo da screenshot** (es. dall'app VirtualCards): selezioni più screenshot insieme, il pannello legge i codici a barre, salta i duplicati e ti fa rinominare le carte prima di importarle.
