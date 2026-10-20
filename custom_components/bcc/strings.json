@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BarCodeCards",
+        "description": "Add the BarCodeCards panel to the sidebar to manage your loyalty cards."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "BarCodeCards is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BarCodeCards",
+        "data": {
+          "sidebar_title": "Sidebar title"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BarCodeCards",
+        "description": "Aggiunge il pannello BarCodeCards alla barra laterale per gestire le tue carte fedeltà."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "BarCodeCards è già configurato."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "BarCodeCards",
+        "data": {
+          "sidebar_title": "Titolo nella barra laterale"
+        }
+      }
+    }
+  }
+}
