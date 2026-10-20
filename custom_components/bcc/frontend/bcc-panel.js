@@ -85,6 +85,16 @@ const STRINGS = {
     sortName: "A–Z",
     sortUsed: "Most used",
     loading: "Loading…",
+    import: "Import from screenshots",
+    importTitle: "Import cards",
+    importHint: "Select one or more screenshots (e.g. from VirtualCards): every barcode found becomes a card.",
+    importReading: "Reading barcodes…",
+    importBtn: "Import",
+    importNone: "No barcode found",
+    importDup: "Already in your cards",
+    importDone: "cards imported",
+    attachShot: "Save the screenshot as the card back",
+    card: "Card",
   },
   it: {
     search: "Cerca carte…",
@@ -123,6 +133,16 @@ const STRINGS = {
     sortName: "A–Z",
     sortUsed: "Più usate",
     loading: "Caricamento…",
+    import: "Importa da screenshot",
+    importTitle: "Importa carte",
+    importHint: "Seleziona uno o più screenshot (es. da VirtualCards): ogni codice a barre trovato diventa una carta.",
+    importReading: "Lettura dei codici…",
+    importBtn: "Importa",
+    importNone: "Nessun codice trovato",
+    importDup: "Già presente tra le tue carte",
+    importDone: "carte importate",
+    attachShot: "Salva lo screenshot come retro della carta",
+    card: "Carta",
   },
 };
 
@@ -345,6 +365,13 @@ const STYLE = `
   .scanner .bottom { padding: 16px; display: flex; align-items: center; gap: 12px; color: #fff; }
   .scanner .btn { color: #fff; border-color: #fff; }
 
+  .imp-row { display: grid; grid-template-columns: 56px 1fr; gap: 10px; align-items: start; padding: 10px 0; border-bottom: 1px solid var(--divider-color, #e0e0e0); }
+  .imp-row.off { opacity: .55; }
+  .imp-row img { width: 56px; height: 90px; object-fit: cover; border-radius: 6px; }
+  .imp-row .fields { display: grid; gap: 6px; min-width: 0; }
+  .imp-row input[type=text], .imp-row select { width: 100%; padding: 6px 8px; border-radius: 6px; font: inherit; border: 1px solid var(--divider-color, #ccc); background: transparent; color: var(--primary-text-color); }
+  .imp-row .msg { font-size: 12px; color: var(--warning-color, #ff9800); }
+  .hint { color: var(--secondary-text-color); font-size: 14px; margin: 0 0 12px; }
   .toast {
     position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
     background: #323232; color: #fff; padding: 12px 20px; border-radius: 8px; z-index: 30;
@@ -467,6 +494,8 @@ class BccPanel extends HTMLElement {
       <div class="toolbar">
         <span id="menu"></span>
         <div class="title">${esc(this._panel?.title || "BarCodeCards")}</div>
+        <button class="icon-btn" id="import" title="${esc(this.t("import"))}"><ha-icon icon="mdi:image-multiple"></ha-icon></button>
+        <input type="file" id="import-files" accept="image/*" multiple hidden>
         <button class="icon-btn" id="add" title="${esc(this.t("add"))}"><ha-icon icon="mdi:plus"></ha-icon></button>
       </div>
       <div class="content">
@@ -489,6 +518,13 @@ class BccPanel extends HTMLElement {
     this._menu = menu;
 
     root.getElementById("add").addEventListener("click", () => this._openEditor(null));
+    const importInput = root.getElementById("import-files");
+    root.getElementById("import").addEventListener("click", () => importInput.click());
+    importInput.addEventListener("change", () => {
+      const files = [...importInput.files];
+      importInput.value = "";
+      if (files.length) this._openImport(files);
+    });
     root.getElementById("search").addEventListener("input", (e) => {
       this._search = e.target.value;
       this._renderGrid();
@@ -883,6 +919,125 @@ class BccPanel extends HTMLElement {
     } catch (err) {
       this._toast(err.message || String(err));
     }
+  }
+
+  // ---------- bulk import ----------
+
+  async _openImport(files) {
+    const bd = this._overlay(`
+      <div class="dialog">
+        <div class="dlg-head">
+          <h2>${esc(this.t("importTitle"))}</h2>
+          <button class="icon-btn" data-act="close"><ha-icon icon="mdi:close"></ha-icon></button>
+        </div>
+        <div class="dlg-body">
+          <p class="hint">${esc(this.t("importHint"))}</p>
+          <div id="imp-status" class="hint"></div>
+          <div id="imp-list"></div>
+          <label class="check" style="margin-top:14px"><input type="checkbox" id="imp-attach"> ${esc(this.t("attachShot"))}</label>
+        </div>
+        <div class="dlg-foot">
+          <button class="btn" data-act="close">${esc(this.t("cancel"))}</button>
+          <button class="btn primary" data-act="import" disabled><ha-icon icon="mdi:import"></ha-icon><span>${esc(this.t("importBtn"))}</span></button>
+        </div>
+      </div>`);
+    let closed = false;
+    const rows = [];
+    const list = bd.querySelector("#imp-list");
+    const status = bd.querySelector("#imp-status");
+    const importBtn = bd.querySelector('[data-act="import"]');
+    const known = new Set(this._cards.map((c) => (c.number || "").trim()).filter(Boolean));
+
+    const updateBtn = () => {
+      const n = rows.filter((r) => r.el.querySelector(".inc").checked).length;
+      importBtn.disabled = !n;
+      importBtn.querySelector("span").textContent = `${this.t("importBtn")} (${n})`;
+    };
+
+    bd.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-act]");
+      if (!btn) return;
+      if (btn.dataset.act === "close") {
+        closed = true;
+        this._closeOverlay();
+      } else if (btn.dataset.act === "import") {
+        importBtn.disabled = true;
+        await this._runImport(rows, bd.querySelector("#imp-attach").checked);
+        updateBtn();
+      }
+    });
+    list.addEventListener("change", (e) => {
+      if (!e.target.classList.contains("inc")) return;
+      e.target.closest(".imp-row").classList.toggle("off", !e.target.checked);
+      updateBtn();
+    });
+
+    for (const [i, file] of files.entries()) {
+      if (closed) return;
+      status.textContent = `${this.t("importReading")} ${i + 1}/${files.length}`;
+      let bitmap;
+      let dataUrl = null;
+      let res = null;
+      try {
+        bitmap = await loadBitmap(file);
+        dataUrl = bitmapToDataUrl(bitmap);
+        res = await detectIn(bitmap).catch(() => null);
+      } catch {
+        /* unreadable image: skip it */
+      } finally {
+        if (bitmap) bitmap.close();
+      }
+      if (!dataUrl) continue;
+      const dup = res && known.has(res.number);
+      const include = !!res && !dup;
+      const el = document.createElement("div");
+      el.className = `imp-row${include ? "" : " off"}`;
+      el.innerHTML = `
+        <img src="${dataUrl}" alt="">
+        <div class="fields">
+          <div class="row"><input type="checkbox" class="inc" ${include ? "checked" : ""}>
+            <input type="text" class="name" maxlength="100" value="${esc(`${this.t("card")} ${this._cards.length + rows.length + 1}`)}"></div>
+          <input type="text" class="number" maxlength="512" value="${esc(res?.number || "")}" placeholder="${esc(this.t("number"))}">
+          <select class="format">${FORMATS.map(([v, l]) => `<option value="${v}">${esc(l)}</option>`).join("")}</select>
+          ${!res ? `<div class="msg">${esc(this.t("importNone"))}</div>` : dup ? `<div class="msg">${esc(this.t("importDup"))}</div>` : ""}
+        </div>`;
+      el.querySelector(".format").value = res?.format || "code128";
+      list.appendChild(el);
+      rows.push({ el, dataUrl });
+      updateBtn();
+    }
+    status.hidden = true;
+  }
+
+  async _runImport(rows, attach) {
+    let count = 0;
+    for (const { el, dataUrl } of rows) {
+      const inc = el.querySelector(".inc");
+      if (!inc.checked) continue;
+      const name = el.querySelector(".name").value.trim() || `${this.t("card")} ${this._cards.length + 1}`;
+      try {
+        let card = await this._ws({
+          type: "bcc/cards/create",
+          name,
+          number: el.querySelector(".number").value.trim(),
+          format: el.querySelector(".format").value,
+          color: COLORS[this._cards.length % COLORS.length],
+        });
+        if (attach) card = await this._ws({ type: "bcc/cards/set_image", card_id: card.id, side: "back", image: dataUrl });
+        this._cards.push(card);
+        count += 1;
+        // Mark as done so a retry after an error does not create duplicates
+        inc.checked = false;
+        el.classList.add("off");
+      } catch (err) {
+        this._renderGrid();
+        this._toast(`${name}: ${err.message || err}`);
+        return;
+      }
+    }
+    this._closeOverlay();
+    this._renderGrid();
+    this._toast(`${count} ${this.t("importDone")}`);
   }
 
   // ---------- camera scanner ----------
