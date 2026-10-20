@@ -38,7 +38,7 @@ Dalle opzioni dell'integrazione puoi cambiare il titolo mostrato nella barra lat
 
 ## Rilasci
 
-HACS mostra come versione l'ultima **release** GitHub. Per pubblicarne una: aggiorna `version` in `custom_components/bcc/manifest.json` e `VERSION` in `custom_components/bcc/const.py`, poi crea e pusha il tag corrispondente (`git tag v1.2.0 && git push origin v1.2.0`). Il workflow *Release* controlla che il tag coincida con la versione e crea la release.
+HACS mostra come versione l'ultima **release** GitHub. Per pubblicarne una basta aumentare `version` in `custom_components/bcc/manifest.json` e `VERSION` in `custom_components/bcc/const.py` (devono coincidere) e fare push su `main`: il workflow *Release* crea il tag `vX.Y.Z` e la release se non esistono già.
 
 ## Crediti
 
