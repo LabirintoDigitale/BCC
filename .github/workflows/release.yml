@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check tag matches manifest version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          manifest=$(jq -r .version custom_components/bcc/manifest.json)
+          const=$(sed -n 's/^VERSION = "\(.*\)"/\1/p' custom_components/bcc/const.py)
+          echo "tag=$tag manifest=$manifest const=$const"
+          [ "$tag" = "$manifest" ] && [ "$tag" = "$const" ]
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes --verify-tag

@@ -36,6 +36,10 @@ Dalle opzioni dell'integrazione puoi cambiare il titolo mostrato nella barra lat
 - La scansione usa il `BarcodeDetector` nativo del browser (Chrome/Android, Safari macOS). Dove manca (iOS, Firefox, Chrome su Windows) viene caricato al volo il polyfill [`barcode-detector`](https://github.com/Sec-ant/barcode-detector) (zxing-wasm) da jsDelivr: serve una connessione internet solo per questa funzione. Il disegno dei codici a barre funziona offline.
 - Disinstallare l'integrazione **non** cancella le carte: per rimuoverle del tutto elimina `.storage/bcc.cards` e la cartella `bcc_images`.
 
+## Rilasci
+
+HACS mostra come versione l'ultima **release** GitHub. Per pubblicarne una: aggiorna `version` in `custom_components/bcc/manifest.json` e `VERSION` in `custom_components/bcc/const.py`, poi crea e pusha il tag corrispondente (`git tag v1.2.0 && git push origin v1.2.0`). Il workflow *Release* controlla che il tag coincida con la versione e crea la release.
+
 ## Crediti
 
 - Codici a barre generati con [bwip-js](https://github.com/metafloor/bwip-js) (MIT), incluso in `custom_components/bcc/frontend/`.
