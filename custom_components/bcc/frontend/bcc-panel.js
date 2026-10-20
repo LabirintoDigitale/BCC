@@ -321,7 +321,8 @@ const STYLE = `
   .face img { width: 100%; height: 100%; object-fit: cover; }
   .face.back { transform: rotateY(180deg); }
   .face .ph { color: #fff; font-weight: 600; font-size: 18px; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
-  .flip-hint { display: flex; align-items: center; justify-content: center; gap: 4px; font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
+  .flip-hint { text-align: center; font-size: 12px; color: var(--secondary-text-color); margin-top: 6px; }
+  .full-row { display: flex; justify-content: center; margin-top: 10px; }
   .fullimg { position: fixed; inset: 0; z-index: 40; background: #000; display: flex; align-items: center; justify-content: center; cursor: zoom-out; }
   .fullimg img { width: 100%; height: 100%; object-fit: contain; }
 
@@ -704,8 +705,8 @@ class BccPanel extends HTMLElement {
                    <div class="face back" style="background:${esc(card.color)}">${face("back")}</div>
                  </div>
                </div>
-               <div class="flip-hint">${esc(this.t("front"))} / ${esc(this.t("back"))} · ${esc(this.t("flip"))} ↻
-                 <button class="icon-btn" data-act="fullscreen" title="${esc(this.t("fullscreen"))}"><ha-icon icon="mdi:fullscreen"></ha-icon></button></div>`
+               <div class="flip-hint">${esc(this.t("front"))} / ${esc(this.t("back"))} · ${esc(this.t("flip"))} ↻</div>
+               <div class="full-row"><button class="btn" data-act="fullscreen"><ha-icon icon="mdi:fullscreen"></ha-icon>${esc(this.t("fullscreen"))}</button></div>`
             : ""}
         </div>
         <div class="dlg-foot">
