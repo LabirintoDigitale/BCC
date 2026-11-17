@@ -2,6 +2,8 @@ name: Android app
 
 on:
   push:
+    branches:
+      - "**"
     paths:
       - "app/**"
       - ".github/workflows/android.yml"
