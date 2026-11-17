@@ -30,6 +30,11 @@ Copia la cartella `custom_components/bcc` dentro `config/custom_components/` e r
 **Impostazioni → Dispositivi e servizi → Aggiungi integrazione → BarCodeCards**. Comparirà la voce *BarCodeCards* nella barra laterale.
 Dalle opzioni dell'integrazione puoi cambiare il titolo mostrato nella barra laterale.
 
+## App Android
+
+Nella cartella [`app/`](app/README.md) c'è un'app Android che si collega a Home Assistant e usa questa integrazione,
+con una **copia locale** delle carte: senza rete si apre in **sola lettura** con le carte scaricate l'ultima volta.
+
 ## Note
 
 - La fotocamera nel browser funziona solo se Home Assistant è aperto in **HTTPS** (o tramite l'app companion / Nabu Casa).
