@@ -13,6 +13,11 @@ on:
     paths:
       - "app/**"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Pubblica l'APK in una release con questo tag (es. app-v1.0.0); vuoto = solo build"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -61,9 +66,10 @@ jobs:
           path: ${{ runner.temp }}/BarCodeCards.apk
 
       - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/app-v')
+        if: startsWith(github.ref, 'refs/tags/app-v') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/BarCodeCards.apk" \
-            --title "App Android $GITHUB_REF_NAME" --notes "APK dell'app Android BarCodeCards." --latest=false
+          gh release create "$TAG" "$RUNNER_TEMP/BarCodeCards.apk" --target "$GITHUB_SHA" \
+            --title "App Android $TAG" --notes "APK dell'app Android BarCodeCards." --latest=false
