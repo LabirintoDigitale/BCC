@@ -21,11 +21,18 @@ o Home Assistant non è raggiungibile, si apre comunque **in sola lettura** con 
 
 ## Configurazione
 
-1. In Home Assistant: **Profilo → Sicurezza → Token di accesso a lunga durata → Crea token**.
-2. Nell'app inserisci l'indirizzo di Home Assistant (es. `http://192.168.1.10:8123`) e il token.
-3. Facoltativo: un **indirizzo alternativo** (es. `https://xxxx.ui.nabu.casa`), provato se il primo non risponde.
+1. Inserisci l'indirizzo di Home Assistant (es. `http://192.168.1.10:8123`).
+2. Facoltativo: un **indirizzo alternativo** (es. `https://xxxx.ui.nabu.casa`), provato se il primo non risponde.
+3. Accedi con **nome utente e password** di Home Assistant (lo stesso accesso della pagina di login,
+   anche con l'autenticazione a due fattori). La password **non viene salvata**: l'app tiene solo il
+   token che Home Assistant le rilascia e lo rinnova da sola. Il dispositivo compare in Home Assistant in
+   *Profilo → Sicurezza → Token di aggiornamento*, da dove puoi revocarlo.
 
-Cambiando server o token la copia locale viene cancellata e riscaricata.
+   In alternativa, scheda **Token**: un token di accesso a lunga durata creato in
+   *Profilo → Sicurezza → Token di accesso a lunga durata*.
+
+Cambiando server o utente la copia locale viene cancellata e riscaricata. Se l'accesso viene revocato
+l'app continua a mostrare le carte in sola lettura finché non accedi di nuovo.
 
 ## Scaricare l'APK
 
@@ -56,7 +63,7 @@ Serve l'Android SDK (Android Studio). Dalla cartella `app/`:
 
 ## Note
 
-- Il token è salvato nelle preferenze private dell'app (escluse dal backup).
+- La password non viene mai salvata; i token sono nelle preferenze private dell'app (escluse dal backup).
 - È ammesso HTTP in chiaro e sono accettati i certificati CA installati dall'utente, per gli Home Assistant
   raggiungibili solo in LAN o con certificato autofirmato.
 - Requisiti: Android 8.0 o superiore, integrazione BarCodeCards installata e configurata.

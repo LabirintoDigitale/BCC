@@ -21,7 +21,7 @@
     <string name="err_bcc_missing">L\'integrazione BarCodeCards non è installata o configurata in Home Assistant.</string>
     <string name="err_image">Immagine non leggibile.</string>
     <string name="err_no_host">Indirizzo non trovato (niente rete?)</string>
-    <string name="err_token">Token non valido.</string>
+    <string name="err_token">Accesso non valido o scaduto: accedi di nuovo dalle impostazioni.</string>
     <string name="err_unreachable">Home Assistant non raggiungibile</string>
     <string name="favorite">Preferita</string>
     <string name="format">Formato codice</string>
@@ -62,4 +62,20 @@
     <string name="token">Token di accesso a lunga durata</string>
     <string name="token_help">In Home Assistant: Profilo → Sicurezza → Token di accesso a lunga durata → Crea token.</string>
     <string name="welcome">Collega Home Assistant</string>
+    <string name="connected_token">Collegato con token di accesso a lunga durata.</string>
+    <string name="connected_as">Collegato come %1$s.</string>
+    <string name="auth_password">Utente e password</string>
+    <string name="auth_token">Token</string>
+    <string name="username">Nome utente</string>
+    <string name="password">Password</string>
+    <string name="password_help">La password non viene salvata: l\'app tiene solo il token di accesso che Home Assistant le rilascia.</string>
+    <string name="login">Accedi</string>
+    <string name="mfa_code">Codice di verifica</string>
+    <string name="mfa_help">Inserisci il codice di %1$s.</string>
+    <string name="mfa_app">autenticazione a due fattori</string>
+    <string name="err_login_restart">Accesso scaduto, riprova.</string>
+    <string name="err_invalid_auth">Nome utente o password errati.</string>
+    <string name="err_invalid_code">Codice non valido.</string>
+    <string name="err_banned">Troppi tentativi falliti: Home Assistant ha bloccato temporaneamente questo dispositivo.</string>
+    <string name="err_login_failed">Accesso non riuscito</string>
 </resources>

@@ -5,8 +5,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import okhttp3.FormBody
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -65,6 +68,116 @@ class HaClient {
                         if (!tmp.renameTo(target)) throw IOException("Cannot save $file")
                         true
                     }
+                }
+            }
+        }
+
+    // ---------- login with username and password (Home Assistant auth API) ----------
+
+    /** Result of one step of the login form. */
+    sealed interface LoginStep {
+        /** Logged in: [code] is exchanged for tokens with [exchangeCode]. */
+        data class Done(val code: String) : LoginStep
+
+        /** Two-factor authentication: send the code with [submitLogin]. */
+        data class NeedsCode(val flowId: String, val module: String?) : LoginStep
+
+        /** The form was rejected; [error] is HA's code, e.g. `invalid_auth`, `invalid_code`. */
+        data class Failed(val flowId: String?, val error: String) : LoginStep
+    }
+
+    data class Tokens(val access: String, val expiresAt: Long, val refresh: String?)
+
+    /** Start the login flow and send username and password. */
+    suspend fun login(baseUrl: String, username: String, password: String): LoginStep {
+        val start = postJson(
+            baseUrl, "/auth/login_flow",
+            JSONObject()
+                .put("client_id", CLIENT_ID)
+                .put("handler", org.json.JSONArray().put("homeassistant").put(JSONObject.NULL))
+                .put("redirect_uri", REDIRECT_URI),
+        )
+        val flowId = start.optString("flow_id").ifEmpty { throw HaException("login", "Login not available") }
+        return submitLogin(
+            baseUrl, flowId,
+            JSONObject().put("username", username).put("password", password),
+        )
+    }
+
+    /** Send a step of the login form ([data] without client_id). */
+    suspend fun submitLogin(baseUrl: String, flowId: String, data: JSONObject): LoginStep {
+        val res = postJson(baseUrl, "/auth/login_flow/$flowId", data.put("client_id", CLIENT_ID))
+        return when (res.optString("type")) {
+            "create_entry" -> LoginStep.Done(res.getString("result"))
+            "form" -> {
+                val error = res.optJSONObject("errors")?.let { e ->
+                    e.keys().asSequence().firstOrNull()?.let { e.optString(it) }
+                }
+                when {
+                    error != null -> LoginStep.Failed(flowId.takeIf { res.optString("step_id") == "mfa" }, error)
+                    res.optString("step_id") == "mfa" -> LoginStep.NeedsCode(
+                        flowId, res.optJSONObject("description_placeholders")?.optString("mfa_module_name"),
+                    )
+                    else -> LoginStep.Failed(null, "unknown")
+                }
+            }
+            "abort" -> LoginStep.Failed(null, res.optString("reason", "abort"))
+            else -> LoginStep.Failed(null, res.optString("message", "unknown"))
+        }
+    }
+
+    suspend fun exchangeCode(baseUrl: String, code: String): Tokens = token(
+        baseUrl,
+        FormBody.Builder()
+            .add("grant_type", "authorization_code")
+            .add("code", code)
+            .add("client_id", CLIENT_ID)
+            .build(),
+    )
+
+    /** New access token from the refresh token. Throws HaException("invalid_grant") if it was revoked. */
+    suspend fun refresh(baseUrl: String, refreshToken: String): Tokens = token(
+        baseUrl,
+        FormBody.Builder()
+            .add("grant_type", "refresh_token")
+            .add("refresh_token", refreshToken)
+            .add("client_id", CLIENT_ID)
+            .build(),
+    )
+
+    private suspend fun token(baseUrl: String, body: FormBody): Tokens = withContext(Dispatchers.IO) {
+        val request = Request.Builder().url("${normalizeUrl(baseUrl)}/auth/token").post(body).build()
+        http.newCall(request).execute().use { response ->
+            val text = response.body?.string().orEmpty()
+            val json = runCatching { JSONObject(text) }.getOrNull()
+            if (!response.isSuccessful) {
+                val code = json?.optString("error")?.ifEmpty { null }
+                if (code != null) throw HaException(code, json?.optString("error_description")?.ifEmpty { null } ?: code)
+                throw IOException("HTTP ${response.code}")
+            }
+            json ?: throw IOException("Invalid response")
+            Tokens(
+                access = json.getString("access_token"),
+                expiresAt = System.currentTimeMillis() + json.optLong("expires_in", 1800) * 1000,
+                refresh = json.optString("refresh_token").ifEmpty { null },
+            )
+        }
+    }
+
+    private suspend fun postJson(baseUrl: String, path: String, body: JSONObject): JSONObject =
+        withContext(Dispatchers.IO) {
+            val request = Request.Builder()
+                .url(normalizeUrl(baseUrl) + path)
+                .post(body.toString().toRequestBody("application/json".toMediaType()))
+                .build()
+            http.newCall(request).execute().use { response ->
+                val text = response.body?.string().orEmpty()
+                val json = runCatching { JSONObject(text) }.getOrNull()
+                when {
+                    json != null -> json
+                    // Too many failed logins: HA bans the address for a while.
+                    response.code == 403 || response.code == 429 -> throw HaException("banned", "HTTP ${response.code}")
+                    else -> throw IOException("HTTP ${response.code}")
                 }
             }
         }
@@ -147,6 +260,13 @@ class HaClient {
     }
 
     companion object {
+        /**
+         * Identifies the app to Home Assistant (shown in Profile → Security → Refresh tokens).
+         * The redirect URI is on the same host, so HA accepts it without fetching anything.
+         */
+        const val CLIENT_ID = "https://github.com/LabirintoDigitale/BCC/"
+        const val REDIRECT_URI = "https://github.com/LabirintoDigitale/BCC/app"
+
         /** `ha.local:8123/` -> `http://ha.local:8123` */
         fun normalizeUrl(url: String): String {
             var u = url.trim().trimEnd('/')

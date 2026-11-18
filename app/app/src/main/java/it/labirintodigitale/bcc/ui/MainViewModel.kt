@@ -116,24 +116,77 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Test the new settings, save them and download the cards. Returns an error message or null. */
-    suspend fun saveSettings(new: Settings): String? {
+    /** Test a long-lived token, save it and download the cards. Returns an error message or null. */
+    suspend fun saveToken(new: Settings): String? {
         try {
             repo.test(new)
         } catch (e: Exception) {
             return describe(e)
         }
+        applySettings(new) { repo.settings = new }
+        return null
+    }
+
+    /** Outcome of a login step, for the settings screen. */
+    sealed interface LoginOutcome {
+        data object Done : LoginOutcome
+        data class NeedsCode(val module: String?) : LoginOutcome
+        data class Error(val message: String) : LoginOutcome
+    }
+
+    private var pendingLogin: CardRepository.PendingLogin? = null
+
+    /** Log in with username and password; the password is not stored. */
+    suspend fun login(url: String, altUrl: String, username: String, password: String): LoginOutcome =
+        loginStep { repo.login(Settings(url, altUrl), username, password) }
+
+    /** Send the two-factor code asked by [login]. */
+    suspend fun loginCode(code: String): LoginOutcome {
+        val pending = pendingLogin ?: return LoginOutcome.Error(str(R.string.err_login_restart))
+        return loginStep { repo.loginCode(pending, code) }
+    }
+
+    private suspend fun loginStep(block: suspend () -> CardRepository.LoginResult): LoginOutcome {
+        val result = try {
+            block()
+        } catch (e: Exception) {
+            return LoginOutcome.Error(describe(e))
+        }
+        return when (result) {
+            is CardRepository.LoginResult.Ok -> {
+                pendingLogin = null
+                applySettings(result.settings) { repo.saveLogin(result) }
+                LoginOutcome.Done
+            }
+            is CardRepository.LoginResult.NeedsCode -> {
+                pendingLogin = result.pending
+                LoginOutcome.NeedsCode(result.module)
+            }
+            is CardRepository.LoginResult.Failed -> {
+                pendingLogin = result.pending
+                LoginOutcome.Error(loginError(result.error))
+            }
+        }
+    }
+
+    private suspend fun applySettings(new: Settings, save: () -> Unit) {
         val old = repo.settings
-        if (old.url != new.url.trim() || old.token != new.token.trim()) {
+        if (old.url != new.url.trim() || (old.username != new.username.trim() && old.username.isNotEmpty())) {
             // Another server or account: drop the old copy.
             repo.clearCache()
             _state.update { it.copy(cards = emptyList(), lastSync = null) }
         }
-        repo.settings = new
+        save()
         _state.update { it.copy(mode = Mode.CONNECTING) }
         syncJob?.cancel()
         refresh()
-        return null
+    }
+
+    private fun loginError(code: String): String = when (code) {
+        "invalid_auth" -> str(R.string.err_invalid_auth)
+        "invalid_code" -> str(R.string.err_invalid_code)
+        "banned" -> str(R.string.err_banned)
+        else -> str(R.string.err_login_failed) + " ($code)"
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
@@ -212,6 +265,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun describe(e: Exception): String = when {
         e is HaException && e.code == "auth_invalid" -> str(R.string.err_token)
+        e is HaException && e.code == "banned" -> str(R.string.err_banned)
         e is HaException && (e.code == "unknown_command" || e.code == "not_loaded") -> str(R.string.err_bcc_missing)
         e is HaException -> e.message ?: e.code
         e is java.net.UnknownHostException -> str(R.string.err_no_host)

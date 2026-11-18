@@ -20,7 +20,7 @@
     <string name="err_bcc_missing">The BarCodeCards integration is not installed or set up in Home Assistant.</string>
     <string name="err_image">Cannot read the image.</string>
     <string name="err_no_host">Address not found (no network?)</string>
-    <string name="err_token">Invalid token.</string>
+    <string name="err_token">Access invalid or expired: log in again from the settings.</string>
     <string name="err_unreachable">Home Assistant unreachable</string>
     <string name="favorite">Favourite</string>
     <string name="format">Barcode format</string>
@@ -61,4 +61,20 @@
     <string name="token">Long-lived access token</string>
     <string name="token_help">In Home Assistant: Profile → Security → Long-lived access tokens → Create token.</string>
     <string name="welcome">Connect Home Assistant</string>
+    <string name="connected_token">Connected with a long-lived access token.</string>
+    <string name="connected_as">Connected as %1$s.</string>
+    <string name="auth_password">Username and password</string>
+    <string name="auth_token">Token</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="password_help">The password is not stored: the app only keeps the access token Home Assistant gives it.</string>
+    <string name="login">Log in</string>
+    <string name="mfa_code">Verification code</string>
+    <string name="mfa_help">Enter the code from %1$s.</string>
+    <string name="mfa_app">two-factor authentication</string>
+    <string name="err_login_restart">Login expired, try again.</string>
+    <string name="err_invalid_auth">Wrong username or password.</string>
+    <string name="err_invalid_code">Invalid code.</string>
+    <string name="err_banned">Too many failed attempts: Home Assistant has temporarily blocked this device.</string>
+    <string name="err_login_failed">Login failed</string>
 </resources>

@@ -21,6 +21,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -49,12 +52,58 @@ fun SettingsScreen(vm: MainViewModel, firstRun: Boolean, onDone: () -> Unit, onB
     val current = remember { vm.repo.settings }
     var url by rememberSaveable { mutableStateOf(current.url) }
     var altUrl by rememberSaveable { mutableStateOf(current.altUrl) }
+    // Username and password unless a long-lived token is already in use.
+    var useToken by rememberSaveable { mutableStateOf(current.token.isNotBlank()) }
+    var username by rememberSaveable { mutableStateOf(current.username) }
+    var password by remember { mutableStateOf("") } // never saved, not even in the instance state
     var token by rememberSaveable { mutableStateOf(current.token) }
-    var showToken by rememberSaveable { mutableStateOf(false) }
+    var showSecret by rememberSaveable { mutableStateOf(false) }
+    // Two-factor step: non-null while Home Assistant waits for the code.
+    var mfaModule by rememberSaveable { mutableStateOf<String?>(null) }
+    var askCode by rememberSaveable { mutableStateOf(false) }
+    var code by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val state by vm.state.collectAsState()
+
+    fun handle(outcome: MainViewModel.LoginOutcome) {
+        when (outcome) {
+            MainViewModel.LoginOutcome.Done -> {
+                password = ""
+                askCode = false
+                onDone()
+            }
+            is MainViewModel.LoginOutcome.NeedsCode -> {
+                askCode = true
+                mfaModule = outcome.module
+                code = ""
+            }
+            is MainViewModel.LoginOutcome.Error -> error = outcome.message
+        }
+    }
+
+    fun submit() {
+        busy = true
+        error = null
+        scope.launch {
+            when {
+                useToken -> {
+                    val err = vm.saveToken(Settings(url, altUrl, token = token))
+                    if (err == null) onDone() else error = err
+                }
+                askCode -> handle(vm.loginCode(code))
+                else -> handle(vm.login(url, altUrl, username, password))
+            }
+            busy = false
+        }
+    }
+
+    val canSubmit = !busy && url.isNotBlank() && when {
+        useToken -> token.isNotBlank()
+        askCode -> code.isNotBlank()
+        else -> username.isNotBlank() && password.isNotEmpty()
+    }
 
     Scaffold(
         topBar = {
@@ -79,8 +128,15 @@ fun SettingsScreen(vm: MainViewModel, firstRun: Boolean, onDone: () -> Unit, onB
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Text(stringResource(R.string.settings_intro), style = MaterialTheme.typography.bodyMedium)
+            if (!firstRun && current.configured) {
+                Text(
+                    if (current.token.isNotBlank()) stringResource(R.string.connected_token)
+                    else stringResource(R.string.connected_as, current.username),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+            }
             OutlinedTextField(
-                url, { url = it },
+                url, { url = it; askCode = false },
                 label = { Text(stringResource(R.string.ha_url)) },
                 placeholder = { Text("http://homeassistant.local:8123") },
                 singleLine = true,
@@ -88,7 +144,7 @@ fun SettingsScreen(vm: MainViewModel, firstRun: Boolean, onDone: () -> Unit, onB
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
-                altUrl, { altUrl = it },
+                altUrl, { altUrl = it; askCode = false },
                 label = { Text(stringResource(R.string.ha_alt_url)) },
                 placeholder = { Text("https://xxxx.ui.nabu.casa") },
                 supportingText = { Text(stringResource(R.string.ha_alt_url_help)) },
@@ -96,34 +152,77 @@ fun SettingsScreen(vm: MainViewModel, firstRun: Boolean, onDone: () -> Unit, onB
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedTextField(
-                token, { token = it },
-                label = { Text(stringResource(R.string.token)) },
-                supportingText = { Text(stringResource(R.string.token_help)) },
-                singleLine = true,
-                visualTransformation = if (showToken) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    TextButton(onClick = { showToken = !showToken }) {
-                        Text(stringResource(if (showToken) R.string.hide else R.string.show))
-                    }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-            )
+
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                SegmentedButton(
+                    selected = !useToken,
+                    onClick = { useToken = false; error = null },
+                    shape = SegmentedButtonDefaults.itemShape(0, 2),
+                ) { Text(stringResource(R.string.auth_password)) }
+                SegmentedButton(
+                    selected = useToken,
+                    onClick = { useToken = true; askCode = false; error = null },
+                    shape = SegmentedButtonDefaults.itemShape(1, 2),
+                ) { Text(stringResource(R.string.auth_token)) }
+            }
+
+            val secretToggle: @Composable () -> Unit = {
+                TextButton(onClick = { showSecret = !showSecret }) {
+                    Text(stringResource(if (showSecret) R.string.hide else R.string.show))
+                }
+            }
+            val secretTransform = if (showSecret) VisualTransformation.None else PasswordVisualTransformation()
+
+            when {
+                useToken -> OutlinedTextField(
+                    token, { token = it },
+                    label = { Text(stringResource(R.string.token)) },
+                    supportingText = { Text(stringResource(R.string.token_help)) },
+                    singleLine = true,
+                    visualTransformation = secretTransform,
+                    trailingIcon = secretToggle,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                askCode -> OutlinedTextField(
+                    code, { code = it.filter(Char::isLetterOrDigit).take(12) },
+                    label = { Text(stringResource(R.string.mfa_code)) },
+                    supportingText = {
+                        Text(stringResource(R.string.mfa_help, mfaModule ?: stringResource(R.string.mfa_app)))
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                else -> {
+                    OutlinedTextField(
+                        username, { username = it },
+                        label = { Text(stringResource(R.string.username)) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    OutlinedTextField(
+                        password, { password = it },
+                        label = { Text(stringResource(R.string.password)) },
+                        supportingText = { Text(stringResource(R.string.password_help)) },
+                        singleLine = true,
+                        visualTransformation = secretTransform,
+                        trailingIcon = secretToggle,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Button(
-                    enabled = !busy && url.isNotBlank() && token.isNotBlank(),
-                    onClick = {
-                        busy = true
-                        error = null
-                        scope.launch {
-                            val err = vm.saveSettings(Settings(url, altUrl, token))
-                            busy = false
-                            if (err == null) onDone() else error = err
-                        }
-                    },
-                ) { Text(stringResource(R.string.connect_save)) }
+                Button(enabled = canSubmit, onClick = ::submit) {
+                    Text(stringResource(if (useToken) R.string.connect_save else R.string.login))
+                }
+                if (askCode && !busy) {
+                    TextButton(onClick = { askCode = false; error = null }) { Text(stringResource(R.string.cancel)) }
+                }
                 if (busy) {
                     Spacer(Modifier.size(16.dp))
                     CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)

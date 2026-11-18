@@ -9,8 +9,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
-data class Settings(val url: String, val altUrl: String, val token: String) {
-    val configured: Boolean get() = url.isNotBlank() && token.isNotBlank()
+/**
+ * Connection settings. Either [refreshToken] (login with username and password; the
+ * password itself is never stored) or [token] (long-lived access token) is set.
+ */
+data class Settings(
+    val url: String,
+    val altUrl: String,
+    val token: String = "",
+    val refreshToken: String = "",
+    val username: String = "",
+) {
+    val configured: Boolean get() = url.isNotBlank() && (token.isNotBlank() || refreshToken.isNotBlank())
 
     /** Addresses to try, in order (e.g. LAN first, then Nabu Casa / external). */
     val urls: List<String> get() = listOf(url, altUrl).filter { it.isNotBlank() }.distinct()
@@ -36,15 +46,104 @@ class CardRepository(context: Context) {
             prefs.getString("url", "") ?: "",
             prefs.getString("alt_url", "") ?: "",
             prefs.getString("token", "") ?: "",
+            prefs.getString("refresh_token", "") ?: "",
+            prefs.getString("username", "") ?: "",
         )
         set(value) {
             prefs.edit()
                 .putString("url", value.url.trim())
                 .putString("alt_url", value.altUrl.trim())
                 .putString("token", value.token.trim())
+                .putString("refresh_token", value.refreshToken)
+                .putString("username", value.username.trim())
+                .remove("access_token")
+                .remove("access_expires")
                 .apply()
             workingUrl = null
         }
+
+    // ---------- login with username and password ----------
+
+    sealed interface LoginResult {
+        /** Logged in; save [settings] to use it. */
+        data class Ok(val settings: Settings, val tokens: HaClient.Tokens) : LoginResult
+
+        /** Two-factor code needed: call [loginCode] with this. */
+        data class NeedsCode(val pending: PendingLogin, val module: String?) : LoginResult
+
+        /** Rejected by Home Assistant: `invalid_auth`, `invalid_code`, `banned`... */
+        data class Failed(val error: String, val pending: PendingLogin?) : LoginResult
+    }
+
+    data class PendingLogin(val settings: Settings, val baseUrl: String, val flowId: String)
+
+    /** Log in on the first address of [s] that answers. Network errors are thrown. */
+    suspend fun login(s: Settings, username: String, password: String): LoginResult {
+        var last: Exception? = null
+        for (url in s.urls) {
+            val step = try {
+                client.login(url, username.trim(), password)
+            } catch (e: HaException) {
+                return LoginResult.Failed(e.code, null)
+            } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
+                last = e
+                continue
+            }
+            return finishStep(s.copy(username = username.trim()), url, step)
+        }
+        throw last ?: IllegalStateException("No URL")
+    }
+
+    suspend fun loginCode(pending: PendingLogin, code: String): LoginResult {
+        val step = client.submitLogin(pending.baseUrl, pending.flowId, JSONObject().put("code", code.trim()))
+        return finishStep(pending.settings, pending.baseUrl, step)
+    }
+
+    private suspend fun finishStep(s: Settings, url: String, step: HaClient.LoginStep): LoginResult =
+        when (step) {
+            is HaClient.LoginStep.NeedsCode ->
+                LoginResult.NeedsCode(PendingLogin(s, url, step.flowId), step.module)
+            is HaClient.LoginStep.Failed ->
+                LoginResult.Failed(step.error, step.flowId?.let { PendingLogin(s, url, it) })
+            is HaClient.LoginStep.Done -> {
+                val tokens = client.exchangeCode(url, step.code)
+                // Check that BCC is installed before keeping the login.
+                client.session(url, tokens.access) { it.call("bcc/cards/list") }
+                LoginResult.Ok(s.copy(token = "", refreshToken = tokens.refresh.orEmpty()), tokens)
+            }
+        }
+
+    /** Save a successful login, keeping its first access token. */
+    fun saveLogin(result: LoginResult.Ok) {
+        settings = result.settings
+        storeAccess(result.tokens)
+    }
+
+    /** Token to authenticate on [url]: the long-lived one, or an access token renewed when needed. */
+    private suspend fun accessToken(url: String): String {
+        val s = settings
+        if (s.token.isNotBlank()) return s.token
+        val cached = prefs.getString("access_token", null)
+        if (cached != null && prefs.getLong("access_expires", 0) > System.currentTimeMillis() + 60_000) {
+            return cached
+        }
+        val tokens = try {
+            client.refresh(url, s.refreshToken)
+        } catch (e: HaException) {
+            // Refresh token revoked or expired: the user has to log in again.
+            throw HaException("auth_invalid", e.message ?: e.code)
+        }
+        storeAccess(tokens)
+        return tokens.access
+    }
+
+    private fun storeAccess(tokens: HaClient.Tokens) {
+        prefs.edit()
+            .putString("access_token", tokens.access)
+            .putLong("access_expires", tokens.expiresAt)
+            .apply()
+    }
 
     fun imageFile(name: String): File = File(imageDir, name)
 
@@ -79,8 +178,7 @@ class CardRepository(context: Context) {
      * Throws if Home Assistant cannot be reached: the old copy is left untouched.
      */
     suspend fun sync(): List<Card> = withContext(Dispatchers.IO) {
-        val s = settings
-        val (url, result) = withServer { session -> session.call("bcc/cards/list") }
+        val (url, token, result) = withServer { session -> session.call("bcc/cards/list") }
         val arr = (result as? JSONObject)?.optJSONArray("cards") ?: JSONArray()
         val cards = (0 until arr.length()).mapNotNull { i ->
             arr.optJSONObject(i)?.let { runCatching { Card.fromJson(it) }.getOrNull() }
@@ -90,7 +188,7 @@ class CardRepository(context: Context) {
         val wanted = cards.flatMap { listOfNotNull(it.front, it.back) }.toSet()
         for (name in wanted) {
             if (!hasImage(name) && SAFE_NAME.matches(name)) {
-                runCatching { client.downloadImage(url, s.token, name, imageFile(name)) }
+                runCatching { client.downloadImage(url, token, name, imageFile(name)) }
             }
         }
         db.replaceAll(cards, System.currentTimeMillis())
@@ -124,29 +222,29 @@ class CardRepository(context: Context) {
 
     private suspend fun mutate(type: String, params: JSONObject, timeoutMs: Long = 30_000): Card =
         withContext(Dispatchers.IO) {
-            val (url, result) = withServer { it.call(type, params, timeoutMs) }
+            val (url, token, result) = withServer { it.call(type, params, timeoutMs) }
             val card = Card.fromJson(result as JSONObject)
-            val s = settings
             for (name in listOfNotNull(card.front, card.back)) {
                 if (!hasImage(name) && SAFE_NAME.matches(name)) {
-                    runCatching { client.downloadImage(url, s.token, name, imageFile(name)) }
+                    runCatching { client.downloadImage(url, token, name, imageFile(name)) }
                 }
             }
             db.upsert(card)
             card
         }
 
-    /** Run [block] on the first base URL that answers; returns that URL too. */
-    private suspend fun <T> withServer(block: suspend (HaClient.Session) -> T): Pair<String, T> {
+    /** Run [block] on the first base URL that answers; returns that URL and the token used too. */
+    private suspend fun <T> withServer(block: suspend (HaClient.Session) -> T): Triple<String, String, T> {
         val s = settings
         if (!s.configured) throw IllegalStateException("Not configured")
         val urls = (listOfNotNull(workingUrl) + s.urls).distinct()
         var last: Exception? = null
         for (url in urls) {
             try {
-                val result = client.session(url, s.token, block)
+                val token = accessToken(url)
+                val result = client.session(url, token, block)
                 workingUrl = url
-                return url to result
+                return Triple(url, token, result)
             } catch (e: HaException) {
                 // HA answered: a wrong token or a rejected command is not fixed by another URL.
                 workingUrl = url
